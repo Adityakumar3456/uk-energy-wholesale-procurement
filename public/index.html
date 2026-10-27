@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UK Energy Trading & Wholesale Procurement Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-6 md:p-10 font-sans">
+  <div class="max-w-7xl mx-auto space-y-8">
+    
+    <!-- Top Header -->
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-6 gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <div class="h-4 w-4 rounded-full bg-emerald-400 animate-pulse"></div>
+          <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-white">UK Wholesale Power Procurement</h1>
+        </div>
+        <p class="text-slate-400 text-sm mt-1">Elexon BMRS Real-time Imbalance & Day-Ahead Renewable Balancing Engine</p>
+      </div>
+
+      <div class="flex items-center gap-3 bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl">
+        <label class="text-xs text-slate-400 font-medium">Settlement Date:</label>
+        <input type="date" id="datePicker" value="2026-10-25" class="bg-transparent text-emerald-400 font-semibold text-sm outline-none cursor-pointer" onchange="fetchDashboardData()">
+      </div>
+    </header>
+
+    <!-- KPI Metric Cards -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div class="bg-slate-900/90 border border-slate-800 p-5 rounded-2xl shadow-sm">
+        <span class="text-xs font-medium uppercase tracking-wider text-slate-400">Total Demand</span>
+        <div class="flex items-baseline gap-2 mt-2">
+          <span id="kpi-demand" class="text-2xl font-bold text-white">--</span>
+          <span class="text-xs text-slate-400">MWh</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-2">Aggregated Consumer Load</p>
+      </div>
+
+      <div class="bg-slate-900/90 border border-slate-800 p-5 rounded-2xl shadow-sm">
+        <span class="text-xs font-medium uppercase tracking-wider text-emerald-400">Renewable Supply</span>
+        <div class="flex items-baseline gap-2 mt-2">
+          <span id="kpi-renewable" class="text-2xl font-bold text-emerald-400">--</span>
+          <span class="text-xs text-emerald-400">MWh</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-2">Wind + Solar Generation</p>
+      </div>
+
+      <div class="bg-slate-900/90 border border-slate-800 p-5 rounded-2xl shadow-sm">
+        <span class="text-xs font-medium uppercase tracking-wider text-rose-400">Wholesale Deficit (Buy)</span>
+        <div class="flex items-baseline gap-2 mt-2">
+          <span id="kpi-procurement" class="text-2xl font-bold text-rose-400">--</span>
+          <span class="text-xs text-rose-400">MWh</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-2">Required Day-Ahead Purchase</p>
+      </div>
+
+      <div class="bg-slate-900/90 border border-slate-800 p-5 rounded-2xl shadow-sm">
+        <span class="text-xs font-medium uppercase tracking-wider text-cyan-400">Peak Deficit Window</span>
+        <div class="flex items-baseline gap-2 mt-2">
+          <span id="kpi-peak-time" class="text-2xl font-bold text-cyan-400">--</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-2">Max Shortage: <span id="kpi-peak-mw" class="text-slate-200 font-semibold">--</span> MW</p>
+      </div>
+    </section>
+
+    <!-- Main Chart Section -->
+    <section class="bg-slate-900/90 border border-slate-800 p-6 rounded-2xl shadow-sm">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-2">
+        <div>
+          <h2 class="text-lg font-bold text-white">Settlement Periods (1 to 48 Half-Hours)</h2>
+          <p class="text-xs text-slate-400">Half-hourly profile comparison: Consumer Demand vs Renewable Generation</p>
+        </div>
+        <div class="flex items-center gap-4 text-xs">
+          <span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-full bg-rose-400 inline-block"></span> Demand (MW)</span>
+          <span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-full bg-emerald-400 inline-block"></span> Renewables (MW)</span>
+          <span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-full bg-cyan-400 inline-block"></span> Net Procurement (MW)</span>
+        </div>
+      </div>
+      <div class="h-96">
+        <canvas id="energyChart"></canvas>
+      </div>
+    </section>
+
+    <!-- Procurement Breakdown Table -->
+    <section class="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+      <div class="p-5 border-b border-slate-800">
+        <h3 class="font-bold text-white text-base">Half-Hourly Settlement Ledger</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Detailed balance figures per 30-minute block</p>
+      </div>
+      <div class="overflow-x-auto max-h-80">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-950 text-xs uppercase text-slate-400 sticky top-0 border-b border-slate-800">
+            <tr>
+              <th class="p-3.5">Period</th>
+              <th class="p-3.5">Time</th>
+              <th class="p-3.5">Demand (MW)</th>
+              <th class="p-3.5">Wind (MW)</th>
+              <th class="p-3.5">Solar (MW)</th>
+              <th class="p-3.5">Renewables (MW)</th>
+              <th class="p-3.5">Procurement (MW)</th>
+              <th class="p-3.5">Action Status</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-800/60 font-mono text-xs"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    let chartInstance = null;
+
+    async function fetchDashboardData() {
+      const selectedDate = document.getElementById('datePicker').value;
+      try {
+        const response = await fetch(`/api/procurement-forecast?settlementDate=${selectedDate}`);
+        const result = await response.json();
+        
+        if (!result.success) return;
+
+        // Populate KPIs
+        document.getElementById('kpi-demand').innerText = result.summary.totalDemandMWh.toLocaleString();
+        document.getElementById('kpi-renewable').innerText = result.summary.totalRenewableMWh.toLocaleString();
+        document.getElementById('kpi-procurement').innerText = result.summary.totalProcurementNeededMWh.toLocaleString();
+        document.getElementById('kpi-peak-time').innerText = result.summary.peakShortageTime;
+        document.getElementById('kpi-peak-mw').innerText = result.summary.peakShortageMW.toLocaleString();
+
+        // Populate Chart
+        const labels = result.data.map(d => `${d.settlementPeriod} (${d.time})`);
+        const demand = result.data.map(d => d.demandMW);
+        const renewables = result.data.map(d => d.totalRenewableMW);
+        const procurement = result.data.map(d => d.netProcurementMW);
+
+        const ctx = document.getElementById('energyChart').getContext('2d');
+        if (chartInstance) chartInstance.destroy();
+
+        chartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Demand (MW)',
+                data: demand,
+                borderColor: '#f87171',
+                backgroundColor: 'rgba(248, 113, 113, 0.05)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3
+              },
+              {
+                label: 'Renewables (MW)',
+                data: renewables,
+                borderColor: '#34d399',
+                backgroundColor: 'rgba(52, 211, 153, 0.08)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3
+              },
+              {
+                label: 'Net Procurement (MW)',
+                data: procurement,
+                borderColor: '#38bdf8',
+                borderDash: [5, 5],
+                borderWidth: 2,
+                tension: 0.3
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8', maxTicksLimit: 16 } },
+              y: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+
+        // Populate Table
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+        result.data.forEach(row => {
+          const isDeficit = row.netProcurementMW > 0;
+          tbody.innerHTML += `
+            <tr class="hover:bg-slate-800/40">
+              <td class="p-3 text-slate-400 font-semibold">${row.settlementPeriod}</td>
+              <td class="p-3 text-slate-200">${row.time}</td>
+              <td class="p-3 text-slate-300">${row.demandMW.toLocaleString()}</td>
+              <td class="p-3 text-slate-300">${row.windMW.toLocaleString()}</td>
+              <td class="p-3 text-slate-300">${row.solarMW.toLocaleString()}</td>
+              <td class="p-3 text-emerald-400 font-medium">${row.totalRenewableMW.toLocaleString()}</td>
+              <td class="p-3 ${isDeficit ? 'text-rose-400 font-bold' : 'text-emerald-400'}">${row.netProcurementMW.toLocaleString()}</td>
+              <td class="p-3">
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${isDeficit ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'}">
+                  ${row.status}
+                </span>
+              </td>
+            </tr>
+          `;
+        });
+
+      } catch (err) {
+        console.error('Error rendering dashboard:', err);
+      }
+    }
+
+    fetchDashboardData();
+  </script>
+</body>
+</html>
